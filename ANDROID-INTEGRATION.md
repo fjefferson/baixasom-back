@@ -1,26 +1,29 @@
-# 📱 Node.js Embarcado no Android (Kotlin)
+# 📱 BaixaSom Android - Implementação Nativa (Recomendado)
 
-Guia completo para **rodar o backend Node.js DENTRO do app Android**.
+Guia completo para implementar download de YouTube **nativamente no Android** (sem Node.js).
 
-## 🎯 Arquitetura
+## 🎯 Arquitetura Nativa
 
 ```
 APK Android único
 ├── UI (Kotlin/Java)
-├── Node.js Runtime (embarcado)
-└── Backend (Express + youtube-dl)
+├── YoutubeDL-Android (download nativo)
+└── FFmpegKit (conversão MP3 + metadata)
 ```
 
 ✅ **Vantagens:**
-- Sem servidor externo necessário
-- Totalmente offline (após instalar)
-- IP residencial do celular (não bloqueado pelo YouTube)
-- Tudo em 1 APK
+- ✅ **APK menor** (~30-50MB vs 150-200MB com Node.js)
+- ✅ **Melhor performance** - Código nativo ARM64
+- ✅ **Mais estável** - Sem problemas de compatibilidade Node.js
+- ✅ **Menor consumo de bateria**
+- ✅ **IP residencial** - Não bloqueado pelo YouTube
+- ✅ **Totalmente offline**
 
-⚠️ **Desvantagens:**
-- APK grande (~150-200MB)
-- Consumo de bateria maior
-- Requer binários ARM64 (FFmpeg, yt-dlp)
+⚠️ **Por que não Node.js embarcado:**
+- ❌ Biblioteca `nodejs-mobile` com problemas no JitPack
+- ❌ APK muito grande (150-200MB)
+- ❌ Complexidade de manutenção
+- ❌ Problemas de compatibilidade entre versões Android
 
 ---
 
@@ -40,56 +43,49 @@ allprojects {
 ### build.gradle (Module: app)
 ```gradle
 dependencies {
-    // Node.js Mobile para Android
-    implementation 'com.github.node-android:nodejs-mobile:0.3.0'
+    // YoutubeDL para Android (download + extração de áudio)
+    implementation 'com.github.yausername.youtubedl-android:library:0.15.0'
+    implementation 'com.github.yausername.youtubedl-android:ffmpeg:0.15.0'
     
-    // Retrofit para comunicação HTTP com Node.js
-    implementation 'com.squareup.retrofit2:retrofit:2.9.0'
-    implementation 'com.squareup.retrofit2:converter-gson:2.9.0'
-    implementation 'com.squareup.okhttp3:okhttp:4.11.0'
-    implementation 'com.squareup.okhttp3:logging-interceptor:4.11.0'
+    // FFmpegKit para conversão e metadata
+    implementation 'com.arthenica:ffmpeg-kit-full:6.0-2'
     
     // Coroutines
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
     
     // ViewModel e LiveData
-    implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.2'
-    implementation 'androidx.lifecycle:lifecycle-livedata-ktx:2.6.2'
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0'
+    implementation 'androidx.lifecycle:lifecycle-livedata-ktx:2.7.0'
+    
+    // Glide para carregar thumbnails
+    implementation 'com.github.bumptech.glide:glide:4.16.0'
 }
 ```
 
----
-
-## 🗂️ 2. Estrutura do Projeto Android
-
-```
-app/
-├── src/
-│   ├── main/
-│   │   ├── java/com/seupacote/baixasom/
+### settings.gradle (adicionar JitPack se necessário)
+```gradle
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url 'https://jitpack.io' }
+    }br/com/baixasom/
 │   │   │   ├── MainActivity.kt
-│   │   │   ├── NodeJsService.kt
-│   │   │   └── api/
-│   │   │       ├── YouTubeApi.kt
-│   │   │       └── RetrofitClient.kt
-│   │   ├── assets/
-│   │   │   └── nodejs-project/    ← BACKEND NODE.JS AQUI
-│   │   │       ├── package.json
-│   │   │       ├── server.js
-│   │   │       ├── routes/
-│   │   │       │   └── youtube.js
-│   │   │       └── utils/
-│   │   │           ├── youtube.js
-│   │   │           └── adTracker.js
+│   │   │   ├── YouTubeService.kt
+│   │   │   ├── viewmodel/
+│   │   │   │   └── MusicViewModel.kt
+│   │   │   ├── repository/
+│   │   │   │   └── YouTubeRepository.kt
+│   │   │   └── model/
+│   │   │       ├── VideoInfo.kt
+│   │   │       └── DownloadProgress.kt
+│   │   ├── res/
+│   │   │   ├── layout/
+│   │   │   └── values/
 │   │   └── AndroidManifest.xml
 ```
 
----
-
-## 📁 3. Copiar Backend para assets/nodejs-project/
-
-**Importante:** Copie TODOS os arquivos do backend (exceto `node_modules/`) para `app/src/main/assets/nodejs-project/`:
-
+**Não precisa copiar nada do backend Node.js!** Tudo será implementado nativamente em Kotlin
 ```
 nodejs-project/
 ├── package.json
@@ -105,11 +101,370 @@ nodejs-project/
 
 ---
 
-## 🔧 4. Configurar server.js para Android
+## 🔧 3. Inicializar YoutubeDL (Application class)
 
-## 🔧 4. Configurar server.js para Android
+Crie `BaixaSomApplication.kt`:
 
-Modifique o `server.js` para enviar mensagens ao Android:
+```kotlin
+package br.com.baixasom
+
+import android.app.Application
+import com.yausername.youtubedl_android.YoutubeDL
+import com.yausername.youtubedl_android.YoutubeDLException
+
+class BaixaSomApplication : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        
+        try {
+            YoutubeDL.getInstance().init(this)
+            // Opcional: atualizar yt-dlp
+            // YoutubeDL.getInstance().updateYoutubeDL(this)
+        } catch (e: YoutubeDLException) {
+            e.printStackTrace()
+        }
+    }
+}
+```
+
+**Adicionar no AndroidManifest.xml:**
+```xml
+<application
+    android:name=".BaixaSomApplication"
+    ...>
+```
+
+---
+
+## 💾 4. Models (Data Classes)
+
+```kotlin
+// VideoInfo.kt
+data class VideoInfo(
+    val id: String,
+    val title: String,
+    val author: String,
+    val duration: Int,
+    val thumbnail: String,
+    val description: String,
+    val uploadDate: String
+)
+
+// DownloadProgress.kt
+sealed class DownloadState {
+    object Idle : DownloadState()
+    data class Downloading(val progress: Int) : DownloadState()
+    data class Success(val file: File) : DownloadState()
+    data class Error(val message: String) : DownloadState()
+}
+```
+
+---
+
+## 🎵 5. YouTubeRepository (Lógica Principal)
+
+```kotlin
+package br.com.baixasom.repository
+
+import android.content.Context
+import com.arthenica.ffmpegkit.FFmpegKit
+import com.arthenica.ffmpegkit.ReturnCode
+import com.yausername.youtubedl_android.YoutubeDL
+import com.yausername.youtubedl_android.YoutubeDLRequest
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.withContext
+import java.io.File
+
+class YouTubeRepository(private val context: Context) {
+    
+    private val cacheDir = context.getExternalFilesDir("temp")
+    
+    suspend fun getVideoInfo(url: String): Result<VideoInfo> = withContext(Dispatchers.IO) {
+        try {
+            val request = YoutubeDLRequest(url)
+            request.addOption("--dump-json")
+            request.addOption("--no-playlist")
+            
+            val response = YoutubeDL.getInstance().execute(request)
+            val json = response.out
+            
+            // Parse JSON (use Gson ou kotlinx.serialization)
+            val videoInfo = parseVideoInfo(json)
+            
+            Result.success(videoInfo)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
+    suspend fun downloadMP3(
+        url: String,
+        quality: String = "high",
+        onProgress: (Int) -> Unit
+    ): Flow<DownloadState> = flow {
+        try {
+            emit(DownloadState.Downloading(0))
+            
+            // 1. Download audio
+            val timestamp = System.currentTimeMillis()
+            val outputPath = File(cacheDir, "audio_$timestamp.%(ext)s").absolutePath
+            
+            val request = YoutubeDLRequest(url)
+            request.addOption("--extract-audio")
+            request.addOption("--audio-format", "mp3")
+            request.addOption("--audio-quality", getQuality(quality))
+            request.addOption("-o", outputPath)
+            request.addOption("--no-playlist")
+            request.addOption("--embed-thumbnail")
+            request.addOption("--add-metadata")
+            
+            // Executar download com progresso
+            YoutubeDL.getInstance().execute(request) { progress, _, line ->
+                // Extrair progresso da linha
+                val progressPercent = extractProgress(line)
+                onProgress(progressPercent)
+                emit(DownloadState.Downloading(progressPercent))
+            }
+            
+            // 2. Encontrar arquivo baixado
+            val downloadedFile = findDownloadedFile(timestamp)
+            
+            if (downloadedFile == null || !downloadedFile.exists()) {
+                emit(DownloadState.Error("Arquivo não encontrado"))
+                return@flow
+            }
+            
+            emit(DownloadState.Success(downloadedFile))
+            
+        } catch (e: Exception) {
+            emit(DownloadState.Error(e.message ?: "Erro desconhecido"))
+        }
+    }
+    
+    private fun getQuality(quality: String): String = when (quality) {
+        "high" -> "0" // Best quality
+        "medium" -> "5"
+        "low" -> "9"
+        else -> "0"
+    }
+    
+    private fun extractProgress(line: String): Int {
+        // Extrair progresso da linha de output
+        // Exemplo: "[download]  45.2% of 5.67MiB"
+        val regex = """\[download\]\s+(\d+\.?\d*)%""".toRegex()
+        val match = regex.find(line)
+        return match?.groupValues?.get(1)?.toFloatOrNull()?.toInt() ?: 0
+    }
+    
+    private fun findDownloadedFile(timestamp: Long): File? {
+        val files = cacheDir?.listFiles { file ->
+            file.name.startsWith("audio_$timestamp") && file.extension == "mp3"
+        }
+        return files?.firstOrNull()
+    }
+    
+    private fun parseVideoInfo(json: String): VideoInfo {
+        // Implementar parse do JSON
+        // Use Gson ou kotlinx.serialization
+        // Exemplo com Gson:
+        val gson = Gson()
+        return gson.fromJson(json, VideoInfo::class.java)
+    }
+    
+    suspend fun saveToGallery(sourceFile: File, title: String, artist: String): Result<Uri> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val values = ContentValues().apply {
+                    put(MediaStore.Audio.Media.DISPLAY_NAME, "$title.mp3")
+                    put(MediaStore.Audio.Media.MIME_TYPE, "audio/mpeg")
+                    put(MediaStore.Audio.Media.TITLE, title)
+                    put(MediaStore.Audio.Media.ARTIST, artist)
+                    put(MediaStore.Audio.Media.ALBUM, "YouTube")
+                    put(MediaStore.Audio.Media.IS_MUSIC, true)
+                    
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        put(MediaStore.Audio.Media.RELATIVE_PATH, Environment.DIRECTORY_MUSIC)
+                        put(MediaStore.Audio.Media.IS_PENDING, 1)
+                    }
+                }
+                
+                val contentResolver = context.contentResolver
+                val uri = contentResolver.insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, values)
+                
+                uri?.let {
+                    contentResolver.openOutputStream(it)?.use { output ->
+                        sourceFile.inputStream().use { input ->
+                            input.copyTo(output)
+                        }
+                    }
+                    
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        values.clear()
+                        values.put(MediaStore.Audio.Media.IS_PENDING, 0)
+                        contentResolver.update(it, values, null, null)
+                    }
+                    
+                    // Deletar arquivo temporário
+                    sourceFile.delete()
+                    
+                    Result.success(it)
+                } ?: Result.failure(Exception("Falha ao criar URI"))
+                
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+}
+```
+
+---
+
+## 🎬 6. ViewModel
+
+```kotlin
+package br.com.baixasom.viewmodel
+
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
+
+class MusicViewModel(application: Application) : AndroidViewModel(application) {
+    
+    private val repository = YouTubeRepository(application)
+    
+    private val _videoInfo = MutableStateFlow<VideoInfo?>(null)
+    val videoInfo: StateFlow<VideoInfo?> = _videoInfo
+    
+    private val _downloadState = MutableStateFlow<DownloadState>(DownloadState.Idle)
+    val downloadState: StateFlow<DownloadState> = _downloadState
+    
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error
+    
+    fun fetchVideoInfo(url: String) {
+        viewModelScope.launch {
+            repository.getVideoInfo(url)
+                .onSuccess { _videoInfo.value = it }
+                .onFailure { _error.value = it.message }
+        }
+    }
+    
+    fun downloadMusic(url: String, quality: String = "high") {
+        viewModelScope.launch {
+            repository.downloadMP3(url, quality) { progress ->
+                // Progress callback inline
+            }.collect { state ->
+                _downloadState.value = state
+            }
+        }
+    }
+    
+    fun saveToGallery(file: File, title: String, artist: String) {
+        viewModelScope.launch {
+            repository.saveToGallery(file, title, artist)
+                .onSuccess { 
+                    _downloadState.value = DownloadState.Idle
+                }
+                .onFailure { 
+                    _error.value = it.message 
+                }
+        }
+    }
+}
+```
+
+---
+
+## 📱 7. MainActivity
+
+```kotlin
+package br.com.baixasom
+
+import android.os.Bundle
+import android.widget.Toast
+import androidx.activity.viewModels
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+
+class MainActivity : AppCompatActivity() {
+    
+    private val viewModel: MusicViewModel by viewModels()
+    
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+        
+        setupObservers()
+        setupListeners()
+    }
+    
+    private fun setupObservers() {
+        lifecycleScope.launch {
+            viewModel.videoInfo.collect { info ->
+                info?.let {
+                    textViewTitle.text = it.title
+                    textViewArtist.text = it.author
+                    Glide.with(this@MainActivity)
+                        .load(it.thumbnail)
+                        .into(imageViewThumbnail)
+                }
+            }
+        }
+        
+        lifecycleScope.launch {
+            viewModel.downloadState.collect { state ->
+                when (state) {
+                    is DownloadState.Idle -> {
+                        progressBar.visibility = View.GONE
+                        buttonDownload.isEnabled = true
+                    }
+                    is DownloadState.Downloading -> {
+                        progressBar.visibility = View.VISIBLE
+                        progressBar.progress = state.progress
+                        textViewProgress.text = "${state.progress}%"
+                    }
+                    is DownloadState.Success -> {
+                        Toast.makeText(this@MainActivity, "Download completo!", Toast.LENGTH_SHORT).show()
+                        // Salvar na galeria
+                        viewModel.saveToGallery(
+                            state.file,
+                            viewModel.videoInfo.value?.title ?: "music",
+                            viewModel.videoInfo.value?.author ?: "Unknown"
+                        )
+                    }
+                    is DownloadState.Error -> {
+                        Toast.makeText(this@MainActivity, state.message, Toast.LENGTH_LONG).show()
+                        progressBar.visibility = View.GONE
+                    }
+                }
+            }
+        }
+    }
+    
+    private fun setupListeners() {
+        buttonSearch.setOnClickListener {
+            val url = editTextUrl.text.toString()
+            if (url.isNotEmpty()) {
+                viewModel.fetchVideoInfo(url)
+            }
+        }
+        
+        buttonDownload.setOnClickListener {
+            val url = editTextUrl.text.toString()
+            if (url.isNotEmpty()) {
+                viewModel.downloadMusic(url, "high")
+            }
+        }
+    }
+}
+```
 
 ```javascript
 const express = require('express');
