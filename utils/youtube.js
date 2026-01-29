@@ -99,7 +99,7 @@ async function getVideoInfo(url) {
  * @param {string} quality - Qualidade do áudio: 'high', 'medium', 'low' (opcional, padrão: 'high')
  * @param {string} userIp - IP do usuário para tracking de anúncios
  */
-async function downloadMP3(url, res, quality = 'medium', userIp) {
+async function downloadMP3(url, res, quality = 'low', userIp) {
   try {
     // Mapear qualidade para valor do yt-dlp (0 = melhor, 9 = pior)
     const qualityMap = {
@@ -162,6 +162,7 @@ async function downloadMP3(url, res, quality = 'medium', userIp) {
       extractAudio: true,
       audioFormat: 'mp3',
       audioQuality: audioQuality,
+      format: 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio', // Prioriza áudio direto (mais rápido)
       output: finalPath,
       ffmpegLocation: ffmpegPath === 'ffmpeg' ? '/data/data/com.termux/files/usr/bin' : path.dirname(ffmpegPath)
     });
