@@ -2,16 +2,24 @@
 
 API para conversão de vídeos do YouTube em MP3 com qualidade ajustável e metadata ID3 completa.
 
-## 📱 **Integração com Android**
+## 📱 **Integração com Android (Node.js Embarcado)**
 
-**Para integrar com seu app Kotlin, veja:** [ANDROID-INTEGRATION.md](./ANDROID-INTEGRATION.md)
+**Este backend roda DENTRO do app Android!** Veja: [ANDROID-INTEGRATION.md](./ANDROID-INTEGRATION.md)
 
-O guia contém:
-- ✅ Código Kotlin completo com Retrofit
-- ✅ Exemplos de download com progress
-- ✅ ViewModels e LiveData
-- ✅ Salvamento na galeria do Android
-- ✅ Tratamento de erros
+### Preparar para Android:
+
+**Windows:**
+```bash
+prepare-for-android.bat
+```
+
+**Linux/Mac:**
+```bash
+chmod +x prepare-for-android.sh
+./prepare-for-android.sh
+```
+
+Depois copie a pasta `android-assets/` para `app/src/main/assets/nodejs-project/` no seu projeto Android.
 
 ---
 

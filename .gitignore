@@ -5,3 +5,4 @@ temp/
 .DS_Store
 *-player-script.js
 *-player-*.js
+android-assets/
