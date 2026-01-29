@@ -46,15 +46,15 @@ async function getVideoInfo(url) {
     const info = await youtubedl(url, {
       dumpSingleJson: true,
       noWarnings: true,
-      noCallHome: true,
       preferFreeFormats: true,
       referer: 'https://www.youtube.com/',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
       addHeader: [
         'Accept-Language:en-US,en;q=0.9',
         'Accept:text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Sec-Fetch-Mode:navigate'
-      ]
+      ],
+      extractorArgs: 'youtube:player_client=android,web;po_token=web+MNjq3DRWCZcxLxRQEeEaZcUQpnJKa9kczdtG4tLlpRrUK5tAA=='
     });
 
     // Limitar duração a 10 minutos (600 segundos)
@@ -107,14 +107,14 @@ async function downloadMP3(url, res, quality = 'medium', userIp) {
       noWarnings: true,
       preferFreeFormats: true,
       referer: 'https://www.youtube.com/',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
       addHeader: [
         'Accept-Language:en-US,en;q=0.9',
         'Accept:text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Sec-Fetch-Mode:navigate'
       ],
       // Usar player client mais compatível
-      extractorArgs: 'youtube:player_client=android,web'
+      extractorArgs: 'youtube:player_client=android,web;po_token=web+MNjq3DRWCZcxLxRQEeEaZcUQpnJKa9kczdtG4tLlpRrUK5tAA=='
     };
 
     // Obter informações primeiro para pegar o título
