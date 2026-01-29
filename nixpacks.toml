@@ -3,7 +3,7 @@ nixPkgs = ["nodejs_22", "yarn-1_x", "python3", "ffmpeg", "yt-dlp"]
 aptPkgs = ["curl", "wget"]
 
 [phases.install]
-cmds = ["yarn install"]
+cmds = ["yarn install", "yt-dlp --version || pip3 install -U yt-dlp"]
 
 [start]
 cmd = "node server.js"
