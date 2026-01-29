@@ -69,9 +69,11 @@ async function getVideoInfo(url) {
       ffmpegLocation: ffmpegPath === 'ffmpeg' ? '/data/data/com.termux/files/usr/bin' : path.dirname(ffmpegPath)
     });
 
-    // Limitar duração a 10 minutos (600 segundos)
-    const MAX_DURATION = 600;
-    if (info.duration > MAX_DURATION) {
+    // Limitar duração apenas em produção
+    const isDev = process.env.NODE_ENV !== 'production';
+    const MAX_DURATION = 600; // 10 minutos
+    
+    if (!isDev && info.duration > MAX_DURATION) {
       throw new Error(`Vídeo muito longo! Duração máxima permitida: 10 minutos. Duração do vídeo: ${Math.floor(info.duration / 60)} minutos.`);
     }
 
@@ -136,9 +138,11 @@ async function downloadMP3(url, res, quality = 'medium', userIp) {
       ffmpegLocation: ffmpegPath === 'ffmpeg' ? '/data/data/com.termux/files/usr/bin' : path.dirname(ffmpegPath)
     });
 
-    // Limitar duração a 10 minutos (600 segundos)
-    const MAX_DURATION = 600;
-    if (info.duration > MAX_DURATION) {
+    // Limitar duração apenas em produção
+    const isDev = process.env.NODE_ENV !== 'production';
+    const MAX_DURATION = 600; // 10 minutos
+    
+    if (!isDev && info.duration > MAX_DURATION) {
       throw new Error(`Vídeo muito longo! Duração máxima permitida: 10 minutos. Duração do vídeo: ${Math.floor(info.duration / 60)} minutos.`);
     }
 
