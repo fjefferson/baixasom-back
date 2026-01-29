@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getVideoInfo, downloadMP3 } = require('../utils/youtube');
+const { getVideoInfo, downloadMP3, isPlaylist, getPlaylistInfo } = require('../utils/youtube');
 const { resetAdCounter, getDownloadStatus } = require('../utils/adTracker');
 
 // GET /api/youtube/info?url=<youtube-url>
@@ -15,10 +15,23 @@ router.get('/info', async (req, res, next) => {
       });
     }
 
+    // Verificar se é playlist
+    if (isPlaylist(url)) {
+      const playlistInfo = await getPlaylistInfo(url);
+      return res.json({
+        success: true,
+        data: playlistInfo
+      });
+    }
+
+    // Se for vídeo único
     const info = await getVideoInfo(url);
     res.json({
       success: true,
-      data: info
+      data: {
+        isPlaylist: false,
+        ...info
+      }
     });
   } catch (error) {
     next(error);
