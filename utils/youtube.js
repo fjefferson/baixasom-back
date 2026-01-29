@@ -233,27 +233,14 @@ async function downloadMP3(url, res, quality = 'low', userIp, addMetadata = fals
 
     // Download e conversão para o formato escolhido
     const timerDownload = Date.now();
-    
-    // Para m4a e mp4, baixar direto sem conversão (mais rápido)
-    if (audioFormat === 'm4a' || audioFormat === 'mp4') {
-      await youtubedl(url, {
-        ...downloadOptions,
-        format: 'bestaudio[ext=m4a]/bestaudio', // Baixa m4a direto
-        output: finalPath,
-        ffmpegLocation: ffmpegPath === 'ffmpeg' ? '/data/data/com.termux/files/usr/bin' : path.dirname(ffmpegPath)
-      });
-    } else {
-      // Para mp3, fazer conversão
-      await youtubedl(url, {
-        ...downloadOptions,
-        extractAudio: true,
-        audioFormat: 'mp3',
-        audioQuality: audioQuality,
-        format: 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio',
-        output: finalPath,
-        ffmpegLocation: ffmpegPath === 'ffmpeg' ? '/data/data/com.termux/files/usr/bin' : path.dirname(ffmpegPath)
-      });
-    }
+    await youtubedl(url, {
+      ...downloadOptions,
+      extractAudio: true,
+      audioFormat: audioFormat,
+      audioQuality: audioQuality,
+      output: finalPath,
+      ffmpegLocation: ffmpegPath === 'ffmpeg' ? '/data/data/com.termux/files/usr/bin' : path.dirname(ffmpegPath)
+    });
     console.log(`⏱️  [TIMER] Download + conversão: ${((Date.now() - timerDownload) / 1000).toFixed(2)}s`);
 
     console.log('Download completed:', title);
