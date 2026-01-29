@@ -2,32 +2,18 @@
 
 Guia rápido para rodar o servidor Node.js diretamente no celular usando Termux.
 
-## ⚡ Setup Rápido
+## ⚡ Setup Rápido (Automático)
 
 ### 1️⃣ Instalar Termux
 - Baixe do [F-Droid](https://f-droid.org/packages/com.termux/) (recomendado)
 - **Não use a versão da Play Store** (está desatualizada)
 
-### 2️⃣ Instalar Dependências
-
-Abra o Termux e execute:
-
-```bash
-# Atualizar pacotes
-pkg update && pkg upgrade
-
-# Instalar Node.js e Git
-pkg install nodejs-lts git
-
-# Instalar Yarn
-npm install -g yarn
-```
-
-### 3️⃣ Obter o Projeto
+### 2️⃣ Obter o Projeto
 
 **Opção A - Clonar do Git:**
 ```bash
 cd ~
+pkg install git -y
 git clone https://github.com/fjefferson/baixasom-back.git
 cd baixasom-back
 ```
@@ -36,32 +22,53 @@ cd baixasom-back
 1. Copie a pasta do projeto para: `/data/data/com.termux/files/home/baixasom-back`
 2. No Termux: `cd ~/baixasom-back`
 
-### 4️⃣ Configurar Variável de Ambiente (IMPORTANTE!)
+### 3️⃣ Executar Script de Setup (TUDO AUTOMÁTICO!)
 
 ```bash
-# Definir variável para ignorar verificação do Python
-export YOUTUBE_DL_SKIP_PYTHON_CHECK=1
+chmod +x setup.sh
+./setup.sh
+```
 
-# Tornar permanente (não precisar definir toda vez)
+🎉 **Pronto!** O script vai:
+- ✅ Atualizar pacotes do Termux
+- ✅ Instalar Node.js, Yarn, FFmpeg e Git
+- ✅ Configurar variável `YOUTUBE_DL_SKIP_PYTHON_CHECK=1`
+- ✅ Instalar dependências do projeto
+- ✅ Perguntar se quer iniciar o servidor
+
+---
+
+## 🛠️ Setup Manual (se preferir)
+
+### 2️⃣ Instalar Dependências Manualmente
+
+```bash
+# Atualizar pacotes
+pkg update && pkg upgrade
+
+# Instalar tudo de uma vez
+pkg install nodejs-lts git ffmpeg -y
+
+# Instalar Yarn
+npm install -g yarn
+```
+
+### 3️⃣ Configurar Variável de Ambiente
+
+```bash
+export YOUTUBE_DL_SKIP_PYTHON_CHECK=1
 echo 'export YOUTUBE_DL_SKIP_PYTHON_CHECK=1' >> ~/.bashrc
 source ~/.bashrc
 ```
 
-⚠️ **Por que isso é necessário?**
-- O `youtube-dl-exec` tenta verificar se Python está instalado
-- No Android/Termux, essa verificação pode falhar
-- Mas a biblioteca funciona sem Python para operações básicas
-- Essa variável pula a verificação
-
-### 5️⃣ Instalar Dependências do Projeto
+### 4️⃣ Instalar Dependências do Projeto
 
 ```bash
+cd ~/baixasom-back
 yarn install
 ```
 
-Isso vai demorar alguns minutos na primeira vez.
-
-### 6️⃣ Executar o Servidor
+### 5️⃣ Executar o Servidor
 
 ```bash
 node server.js
