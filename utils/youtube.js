@@ -26,6 +26,22 @@ if (!fs.existsSync(downloadsDir)) {
 }
 
 /**
+ * Normaliza o nome do arquivo removendo acentos e caracteres especiais
+ * @param {string} filename - Nome do arquivo a ser normalizado
+ * @returns {string} Nome normalizado
+ */
+function normalizeFilename(filename) {
+  return filename
+    .normalize('NFD')                           // Decompõe caracteres acentuados
+    .replace(/[\u0300-\u036f]/g, '')           // Remove acentos
+    .replace(/[^\w\s-]/g, '')                  // Remove caracteres especiais (mantém letras, números, espaços e hífens)
+    .replace(/\s+/g, '_')                      // Substitui espaços por underscores
+    .replace(/_+/g, '_')                       // Remove underscores duplicados
+    .replace(/^_|_$/g, '')                     // Remove underscores no início e fim
+    .substring(0, 200);                        // Limita tamanho (evita nomes muito longos)
+}
+
+/**
  * Faz download de uma imagem e retorna o buffer
  * @param {string} url - URL da imagem
  * @returns {Promise<Buffer>} Buffer da imagem
@@ -93,13 +109,15 @@ async function getVideoInfo(url) {
 }
 
 /**
- * Faz download do vídeo e converte para MP3
+ * Faz download do vídeo e converte para áudio
  * @param {string} url - URL do vídeo do YouTube
  * @param {Object} res - Express response object
- * @param {string} quality - Qualidade do áudio: 'high', 'medium', 'low' (opcional, padrão: 'high')
+ * @param {string} quality - Qualidade do áudio: 'high', 'medium', 'low' (opcional, padrão: 'low')
  * @param {string} userIp - IP do usuário para tracking de anúncios
+ * @param {boolean} addMetadata - Se true, adiciona metadados ID3 (título, artista, capa). Padrão: false
+ * @param {string} format - Formato do áudio: 'mp3' ou 'm4a' (opcional, padrão: 'mp3')
  */
-async function downloadMP3(url, res, quality = 'low', userIp) {
+async function downloadMP3(url, res, quality = 'low', userIp, addMetadata = false, format = 'mp3') {
   try {
     // Mapear qualidade para valor do yt-dlp (0 = melhor, 9 = pior)
     const qualityMap = {
@@ -110,6 +128,10 @@ async function downloadMP3(url, res, quality = 'low', userIp) {
 
     // Validar e definir qualidade
     const audioQuality = qualityMap[quality] !== undefined ? qualityMap[quality] : qualityMap['medium'];
+    
+    // Validar formato (apenas mp3 ou m4a)
+    const audioFormat = ['mp3', 'm4a'].includes(format) ? format : 'mp3';
+    const contentType = audioFormat === 'm4a' ? 'audio/mp4' : 'audio/mpeg';
     
     // Incrementar contador de downloads
     const adStatus = incrementDownload(userIp);
@@ -146,21 +168,21 @@ async function downloadMP3(url, res, quality = 'low', userIp) {
       throw new Error(`Vídeo muito longo! Duração máxima permitida: 10 minutos. Duração do vídeo: ${Math.floor(info.duration / 60)} minutos.`);
     }
 
-    const title = info.title.replace(/[^\w\s]/gi, '').replace(/\s+/g, '_');
-    const finalPath = path.join(downloadsDir, `${timestamp}_${title}.mp3`);
+    const title = normalizeFilename(info.title);
+    const finalPath = path.join(downloadsDir, `${timestamp}_${title}.${audioFormat}`);
 
     // Configurar headers para download + informações de anúncio
-    res.setHeader('Content-Disposition', `attachment; filename="${title}.mp3"`);
-    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Content-Disposition', `attachment; filename="${title}.${audioFormat}"`);
+    res.setHeader('Content-Type', contentType);
     res.setHeader('X-Requires-Ad', adStatus.requiresAd.toString());
     res.setHeader('X-Downloads-Count', adStatus.count.toString());
     res.setHeader('X-Downloads-Until-Ad', adStatus.downloadsUntilAd.toString());
 
-    // Download e conversão para MP3 SEM metadados (para evitar problemas com caracteres especiais)
+    // Download e conversão para o formato escolhido
     await youtubedl(url, {
       ...downloadOptions,
       extractAudio: true,
-      audioFormat: 'mp3',
+      audioFormat: audioFormat,
       audioQuality: audioQuality,
       format: 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio', // Prioriza áudio direto (mais rápido)
       output: finalPath,
@@ -169,20 +191,21 @@ async function downloadMP3(url, res, quality = 'low', userIp) {
 
     console.log('Download completed:', title);
 
-    // Adicionar TODOS os metadados usando node-id3 (mais confiável que ffmpeg)
-    try {
-      console.log('Adding ID3 tags...');
-      
-      // Fazer download da thumbnail
-      let imageBuffer = null;
-      if (info.thumbnail) {
-        try {
-          imageBuffer = await downloadImage(info.thumbnail);
-          console.log('Thumbnail downloaded successfully');
-        } catch (imageErr) {
-          console.error('Failed to download thumbnail:', imageErr.message);
-        }
+    // Sempre fazer download da thumbnail (independente de metadata)
+    let imageBuffer = null;
+    if (info.thumbnail) {
+      try {
+        imageBuffer = await downloadImage(info.thumbnail);
+        console.log('Thumbnail downloaded successfully');
+      } catch (imageErr) {
+        console.error('Failed to download thumbnail:', imageErr.message);
       }
+    }
+
+    // Adicionar metadados apenas se solicitado (economiza tempo)
+    if (addMetadata) {
+      try {
+        console.log('Adding ID3 tags...');
 
       // Preparar tags ID3
       const tags = {
@@ -217,8 +240,11 @@ async function downloadMP3(url, res, quality = 'low', userIp) {
       } else {
         console.warn('Failed to write ID3 tags');
       }
-    } catch (tagError) {
-      console.error('Error adding ID3 tags:', tagError.message);
+      } catch (tagError) {
+        console.error('Error adding ID3 tags:', tagError.message);
+      }
+    } else {
+      console.log('⚡ Skipping metadata (faster download)');
     }
 
     // Enviar arquivo para o cliente

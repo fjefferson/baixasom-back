@@ -38,10 +38,10 @@ router.get('/info', async (req, res, next) => {
   }
 });
 
-// GET /api/youtube/download?url=<youtube-url>&quality=<high|medium|low>
+// GET /api/youtube/download?url=<youtube-url>&quality=<high|medium|low>&metadata=<true|false>&format=<mp3|m4a>
 router.get('/download', async (req, res, next) => {
   try {
-    const { url, quality } = req.query;
+    const { url, quality, metadata, format } = req.query;
 
     if (!url) {
       return res.status(400).json({
@@ -52,8 +52,11 @@ router.get('/download', async (req, res, next) => {
 
     // Obter IP do usuário
     const userIp = req.ip || req.connection.remoteAddress;
+    
+    // Converter metadata para boolean (padrão: false para velocidade)
+    const addMetadata = metadata === 'true';
 
-    await downloadMP3(url, res, quality, userIp);
+    await downloadMP3(url, res, quality, userIp, addMetadata, format);
   } catch (error) {
     next(error);
   }
