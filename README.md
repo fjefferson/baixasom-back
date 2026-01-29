@@ -1,6 +1,19 @@
-# YouMP3 Backend
+# 🎵 BaixaSom Backend
 
-Backend para conversão de vídeos do YouTube em MP3.
+API para conversão de vídeos do YouTube em MP3 com qualidade ajustável e metadata ID3 completa.
+
+## 📱 **Integração com Android**
+
+**Para integrar com seu app Kotlin, veja:** [ANDROID-INTEGRATION.md](./ANDROID-INTEGRATION.md)
+
+O guia contém:
+- ✅ Código Kotlin completo com Retrofit
+- ✅ Exemplos de download com progress
+- ✅ ViewModels e LiveData
+- ✅ Salvamento na galeria do Android
+- ✅ Tratamento de erros
+
+---
 
 ## 🚀 Instalação
 
