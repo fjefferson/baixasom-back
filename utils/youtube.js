@@ -69,9 +69,11 @@ async function getVideoInfo(url) {
       ffmpegLocation: ffmpegPath === 'ffmpeg' ? '/data/data/com.termux/files/usr/bin' : path.dirname(ffmpegPath)
     });
 
-    // Limitar duração a 10 minutos (600 segundos)
-    const MAX_DURATION = 600;
-    if (info.duration > MAX_DURATION) {
+    // Limitar duração apenas em produção
+    const isDev = process.env.NODE_ENV !== 'production';
+    const MAX_DURATION = 600; // 10 minutos
+    
+    if (!isDev && info.duration > MAX_DURATION) {
       throw new Error(`Vídeo muito longo! Duração máxima permitida: 10 minutos. Duração do vídeo: ${Math.floor(info.duration / 60)} minutos.`);
     }
 
@@ -136,9 +138,11 @@ async function downloadMP3(url, res, quality = 'medium', userIp) {
       ffmpegLocation: ffmpegPath === 'ffmpeg' ? '/data/data/com.termux/files/usr/bin' : path.dirname(ffmpegPath)
     });
 
-    // Limitar duração a 10 minutos (600 segundos)
-    const MAX_DURATION = 600;
-    if (info.duration > MAX_DURATION) {
+    // Limitar duração apenas em produção
+    const isDev = process.env.NODE_ENV !== 'production';
+    const MAX_DURATION = 600; // 10 minutos
+    
+    if (!isDev && info.duration > MAX_DURATION) {
       throw new Error(`Vídeo muito longo! Duração máxima permitida: 10 minutos. Duração do vídeo: ${Math.floor(info.duration / 60)} minutos.`);
     }
 
@@ -255,7 +259,71 @@ async function downloadMP3(url, res, quality = 'medium', userIp) {
   }
 }
 
+/**
+ * Verifica se a URL é uma playlist
+ * @param {string} url - URL a ser verificada
+ * @returns {boolean} True se for playlist
+ */
+function isPlaylist(url) {
+  return url.includes('list=') || url.includes('/playlist');
+}
+
+/**
+ * Obtém informações de uma playlist do YouTube
+ * @param {string} url - URL da playlist
+ * @returns {Promise<Object>} Informações da playlist com lista de vídeos
+ */
+async function getPlaylistInfo(url) {
+  try {
+    // Verificar se realmente é uma playlist
+    if (!isPlaylist(url)) {
+      throw new Error('URL fornecida não é uma playlist');
+    }
+
+    console.log('Fetching playlist info...');
+    
+    const playlistData = await youtubedl(url, {
+      dumpSingleJson: true,
+      flatPlaylist: true,
+      noWarnings: true,
+      preferFreeFormats: true,
+      referer: 'https://www.youtube.com/',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      addHeader: [
+        'Accept-Language:en-US,en;q=0.9',
+        'Accept:text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Sec-Fetch-Mode:navigate'
+      ],
+      extractorArgs: 'youtube:player_client=android,web',
+      ffmpegLocation: ffmpegPath === 'ffmpeg' ? '/data/data/com.termux/files/usr/bin' : path.dirname(ffmpegPath)
+    });
+
+    // Extrair lista de vídeos
+    const videos = (playlistData.entries || []).map(video => ({
+      id: video.id,
+      url: `https://www.youtube.com/watch?v=${video.id}`,
+      title: video.title,
+      duration: video.duration,
+      thumbnail: video.thumbnail || `https://i.ytimg.com/vi/${video.id}/default.jpg`,
+      uploader: video.uploader || video.channel
+    }));
+
+    return {
+      isPlaylist: true,
+      title: playlistData.title || 'Playlist',
+      uploader: playlistData.uploader || playlistData.channel,
+      videoCount: videos.length,
+      videos: videos
+    };
+  } catch (error) {
+    console.error('Error getting playlist info:', error.message);
+    throw new Error('Não foi possível obter informações da playlist. Verifique se a playlist está disponível e é pública.');
+  }
+}
+
 module.exports = {
   getVideoInfo,
-  downloadMP3
+  downloadMP3,
+  isPlaylist,
+  getPlaylistInfo
 };
