@@ -65,7 +65,8 @@ async function getVideoInfo(url) {
         'Accept:text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Sec-Fetch-Mode:navigate'
       ],
-      extractorArgs: 'youtube:player_client=android,web;po_token=web+MNjq3DRWCZcxLxRQEeEaZcUQpnJKa9kczdtG4tLlpRrUK5tAA=='
+      extractorArgs: 'youtube:player_client=android,web;po_token=web+MNjq3DRWCZcxLxRQEeEaZcUQpnJKa9kczdtG4tLlpRrUK5tAA==',
+      ffmpegLocation: ffmpegPath === 'ffmpeg' ? '/data/data/com.termux/files/usr/bin' : path.dirname(ffmpegPath)
     });
 
     // Limitar duração a 10 minutos (600 segundos)
@@ -132,6 +133,7 @@ async function downloadMP3(url, res, quality = 'medium', userIp) {
     const info = await youtubedl(url, {
       ...downloadOptions,
       dumpSingleJson: true,
+      ffmpegLocation: ffmpegPath === 'ffmpeg' ? '/data/data/com.termux/files/usr/bin' : path.dirname(ffmpegPath)
     });
 
     // Limitar duração a 10 minutos (600 segundos)
@@ -157,7 +159,7 @@ async function downloadMP3(url, res, quality = 'medium', userIp) {
       audioFormat: 'mp3',
       audioQuality: audioQuality,
       output: finalPath,
-      ffmpegLocation: path.dirname(ffmpegPath)
+      ffmpegLocation: ffmpegPath === 'ffmpeg' ? '/data/data/com.termux/files/usr/bin' : path.dirname(ffmpegPath)
     });
 
     console.log('Download completed:', title);
