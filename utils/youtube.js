@@ -25,6 +25,29 @@ if (!fs.existsSync(downloadsDir)) {
   fs.mkdirSync(downloadsDir, { recursive: true });
 }
 
+// Cache simples de informações de vídeos (TTL: 5 minutos)
+const videoInfoCache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+
+function getCachedVideoInfo(url) {
+  const cached = videoInfoCache.get(url);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    console.log('✅ Usando info do cache');
+    return cached.data;
+  }
+  return null;
+}
+
+function setCachedVideoInfo(url, data) {
+  videoInfoCache.set(url, { data, timestamp: Date.now() });
+  // Limpar cache antigo (mais de 10 minutos)
+  for (const [key, value] of videoInfoCache.entries()) {
+    if (Date.now() - value.timestamp > CACHE_TTL * 2) {
+      videoInfoCache.delete(key);
+    }
+  }
+}
+
 /**
  * Normaliza o nome do arquivo removendo acentos e caracteres especiais
  * @param {string} filename - Nome do arquivo a ser normalizado
@@ -70,6 +93,10 @@ async function downloadImage(url) {
  */
 async function getVideoInfo(url) {
   try {
+    // Verificar cache primeiro
+    const cachedInfo = getCachedVideoInfo(url);
+    if (cachedInfo) return cachedInfo;
+    
     const info = await youtubedl(url, {
       dumpSingleJson: true,
       noWarnings: true,
@@ -93,7 +120,7 @@ async function getVideoInfo(url) {
       throw new Error(`Vídeo muito longo! Duração máxima permitida: 10 minutos. Duração do vídeo: ${Math.floor(info.duration / 60)} minutos.`);
     }
 
-    return {
+    const videoData = {
       title: info.title,
       author: info.uploader || info.channel,
       duration: info.duration,
@@ -102,6 +129,11 @@ async function getVideoInfo(url) {
       viewCount: info.view_count,
       uploadDate: info.upload_date
     };
+    
+    // Salvar no cache
+    setCachedVideoInfo(url, videoData);
+    
+    return videoData;
   } catch (error) {
     console.error('Error getting video info:', error.message);
     throw new Error('Não foi possível obter informações do vídeo. Verifique se o vídeo está disponível.');
@@ -156,13 +188,29 @@ async function downloadMP3(url, res, quality = 'low', userIp, addMetadata = fals
       extractorArgs: 'youtube:player_client=android,web;po_token=web+MNjq3DRWCZcxLxRQEeEaZcUQpnJKa9kczdtG4tLlpRrUK5tAA=='
     };
 
-    // Obter informações primeiro para pegar o título
+    // Obter informações primeiro para pegar o título (usar cache se disponível)
     const timerInfo = Date.now();
-    const info = await youtubedl(url, {
-      ...downloadOptions,
-      dumpSingleJson: true,
-      ffmpegLocation: ffmpegPath === 'ffmpeg' ? '/data/data/com.termux/files/usr/bin' : path.dirname(ffmpegPath)
-    });
+    let info = getCachedVideoInfo(url);
+    
+    if (!info) {
+      const fullInfo = await youtubedl(url, {
+        ...downloadOptions,
+        dumpSingleJson: true,
+        ffmpegLocation: ffmpegPath === 'ffmpeg' ? '/data/data/com.termux/files/usr/bin' : path.dirname(ffmpegPath)
+      });
+      
+      info = {
+        title: fullInfo.title,
+        uploader: fullInfo.uploader,
+        channel: fullInfo.channel,
+        duration: fullInfo.duration,
+        thumbnail: fullInfo.thumbnail,
+        upload_date: fullInfo.upload_date,
+        description: fullInfo.description
+      };
+      
+      setCachedVideoInfo(url, info);
+    }
     console.log(`⏱️  [TIMER] Buscar info: ${((Date.now() - timerInfo) / 1000).toFixed(2)}s`);
 
     // Limitar duração apenas em produção
@@ -185,15 +233,27 @@ async function downloadMP3(url, res, quality = 'low', userIp, addMetadata = fals
 
     // Download e conversão para o formato escolhido
     const timerDownload = Date.now();
-    await youtubedl(url, {
-      ...downloadOptions,
-      extractAudio: true,
-      audioFormat: audioFormat,
-      audioQuality: audioQuality,
-      format: 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio', // Prioriza áudio direto (mais rápido)
-      output: finalPath,
-      ffmpegLocation: ffmpegPath === 'ffmpeg' ? '/data/data/com.termux/files/usr/bin' : path.dirname(ffmpegPath)
-    });
+    
+    // Para m4a e mp4, baixar direto sem conversão (mais rápido)
+    if (audioFormat === 'm4a' || audioFormat === 'mp4') {
+      await youtubedl(url, {
+        ...downloadOptions,
+        format: 'bestaudio[ext=m4a]/bestaudio', // Baixa m4a direto
+        output: finalPath,
+        ffmpegLocation: ffmpegPath === 'ffmpeg' ? '/data/data/com.termux/files/usr/bin' : path.dirname(ffmpegPath)
+      });
+    } else {
+      // Para mp3, fazer conversão
+      await youtubedl(url, {
+        ...downloadOptions,
+        extractAudio: true,
+        audioFormat: 'mp3',
+        audioQuality: audioQuality,
+        format: 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio',
+        output: finalPath,
+        ffmpegLocation: ffmpegPath === 'ffmpeg' ? '/data/data/com.termux/files/usr/bin' : path.dirname(ffmpegPath)
+      });
+    }
     console.log(`⏱️  [TIMER] Download + conversão: ${((Date.now() - timerDownload) / 1000).toFixed(2)}s`);
 
     console.log('Download completed:', title);
