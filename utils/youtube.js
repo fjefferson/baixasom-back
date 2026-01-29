@@ -209,22 +209,25 @@ async function downloadMP3(url, res, quality = 'medium', userIp) {
         console.error('Error sending file:', err.message);
       }
       
-      // Deletar arquivo após envio apenas em produção
-      const isDevelopment = process.env.NODE_ENV !== 'production';
+      // Deletar arquivo após envio
+      // IMPORTANTE: No Android, SEMPRE deletar para economizar espaço do celular
+      const shouldDelete = process.env.NODE_ENV === 'production' || 
+                          process.env.PLATFORM === 'android';
       
-      if (!isDevelopment) {
-        // Em produção: deletar após 5 segundos
+      // Padrão: deletar (pode desabilitar só no desenvolvimento PC)
+      if (shouldDelete !== false) {
+        // Deletar após 5 segundos (tempo para completar stream)
         setTimeout(() => {
           fs.unlink(finalPath, (unlinkErr) => {
             if (unlinkErr) {
               console.error('Error deleting file:', unlinkErr.message);
             } else {
-              console.log('File deleted:', finalPath);
+              console.log('✅ Arquivo temporário deletado:', finalPath);
             }
           });
         }, 5000);
       } else {
-        console.log('Development mode: File kept at', finalPath);
+        console.log('⚠️  Development mode: File kept at', finalPath);
       }
     });
 

@@ -1,6 +1,10 @@
 // server-android.js
 // Versão do server.js otimizada para rodar no Android via nodejs-mobile
 
+// Configurar ambiente Android
+process.env.PLATFORM = 'android';
+process.env.NODE_ENV = process.env.NODE_ENV || 'production';
+
 const express = require('express');
 const cors = require('cors');
 const youtubeRoutes = require('./routes/youtube');
