@@ -38,7 +38,7 @@ router.get('/info', async (req, res, next) => {
   }
 });
 
-// GET /api/youtube/download?url=<youtube-url>&quality=<high|medium|low>&metadata=<true|false>&format=<mp3|m4a>
+// GET /api/youtube/download?url=<youtube-url>&quality=<high|medium|low>&metadata=<true|false>&format=<mp3|m4a|mp4>
 router.get('/download', async (req, res, next) => {
   try {
     const { url, quality, metadata, format } = req.query;

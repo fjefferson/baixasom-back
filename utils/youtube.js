@@ -115,7 +115,7 @@ async function getVideoInfo(url) {
  * @param {string} quality - Qualidade do áudio: 'high', 'medium', 'low' (opcional, padrão: 'low')
  * @param {string} userIp - IP do usuário para tracking de anúncios
  * @param {boolean} addMetadata - Se true, adiciona metadados ID3 (título, artista, capa). Padrão: false
- * @param {string} format - Formato do áudio: 'mp3' ou 'm4a' (opcional, padrão: 'mp3')
+ * @param {string} format - Formato do áudio: 'mp3', 'm4a' ou 'mp4' (opcional, padrão: 'mp3')
  */
 async function downloadMP3(url, res, quality = 'low', userIp, addMetadata = false, format = 'mp3') {
   try {
@@ -132,9 +132,9 @@ async function downloadMP3(url, res, quality = 'low', userIp, addMetadata = fals
     // Validar e definir qualidade
     const audioQuality = qualityMap[quality] !== undefined ? qualityMap[quality] : qualityMap['medium'];
     
-    // Validar formato (apenas mp3 ou m4a)
-    const audioFormat = ['mp3', 'm4a'].includes(format) ? format : 'mp3';
-    const contentType = audioFormat === 'm4a' ? 'audio/mp4' : 'audio/mpeg';
+    // Validar formato (mp3, m4a ou mp4)
+    const audioFormat = ['mp3', 'm4a', 'mp4'].includes(format) ? format : 'mp3';
+    const contentType = audioFormat === 'mp3' ? 'audio/mpeg' : 'audio/mp4';
     
     // Incrementar contador de downloads
     const adStatus = incrementDownload(userIp);
