@@ -119,6 +119,9 @@ async function getVideoInfo(url) {
  */
 async function downloadMP3(url, res, quality = 'low', userIp, addMetadata = false, format = 'mp3') {
   try {
+    const timerStart = Date.now();
+    console.log('⏱️  [TIMER] Iniciando download...');
+    
     // Mapear qualidade para valor do yt-dlp (0 = melhor, 9 = pior)
     const qualityMap = {
       'high': 0,      // ~256kbps
@@ -154,11 +157,13 @@ async function downloadMP3(url, res, quality = 'low', userIp, addMetadata = fals
     };
 
     // Obter informações primeiro para pegar o título
+    const timerInfo = Date.now();
     const info = await youtubedl(url, {
       ...downloadOptions,
       dumpSingleJson: true,
       ffmpegLocation: ffmpegPath === 'ffmpeg' ? '/data/data/com.termux/files/usr/bin' : path.dirname(ffmpegPath)
     });
+    console.log(`⏱️  [TIMER] Buscar info: ${((Date.now() - timerInfo) / 1000).toFixed(2)}s`);
 
     // Limitar duração apenas em produção
     const isDev = process.env.NODE_ENV !== 'production';
@@ -179,6 +184,7 @@ async function downloadMP3(url, res, quality = 'low', userIp, addMetadata = fals
     res.setHeader('X-Downloads-Until-Ad', adStatus.downloadsUntilAd.toString());
 
     // Download e conversão para o formato escolhido
+    const timerDownload = Date.now();
     await youtubedl(url, {
       ...downloadOptions,
       extractAudio: true,
@@ -188,15 +194,17 @@ async function downloadMP3(url, res, quality = 'low', userIp, addMetadata = fals
       output: finalPath,
       ffmpegLocation: ffmpegPath === 'ffmpeg' ? '/data/data/com.termux/files/usr/bin' : path.dirname(ffmpegPath)
     });
+    console.log(`⏱️  [TIMER] Download + conversão: ${((Date.now() - timerDownload) / 1000).toFixed(2)}s`);
 
     console.log('Download completed:', title);
 
     // Sempre fazer download da thumbnail (independente de metadata)
+    const timerThumb = Date.now();
     let imageBuffer = null;
     if (info.thumbnail) {
       try {
         imageBuffer = await downloadImage(info.thumbnail);
-        console.log('Thumbnail downloaded successfully');
+        console.log(`⏱️  [TIMER] Download thumbnail: ${((Date.now() - timerThumb) / 1000).toFixed(2)}s`);
       } catch (imageErr) {
         console.error('Failed to download thumbnail:', imageErr.message);
       }
@@ -204,6 +212,7 @@ async function downloadMP3(url, res, quality = 'low', userIp, addMetadata = fals
 
     // Adicionar metadados apenas se solicitado (economiza tempo)
     if (addMetadata) {
+      const timerMetadata = Date.now();
       try {
         console.log('Adding ID3 tags...');
 
@@ -240,6 +249,7 @@ async function downloadMP3(url, res, quality = 'low', userIp, addMetadata = fals
       } else {
         console.warn('Failed to write ID3 tags');
       }
+      console.log(`⏱️  [TIMER] Adicionar metadados: ${((Date.now() - timerMetadata) / 1000).toFixed(2)}s`);
       } catch (tagError) {
         console.error('Error adding ID3 tags:', tagError.message);
       }
@@ -248,7 +258,11 @@ async function downloadMP3(url, res, quality = 'low', userIp, addMetadata = fals
     }
 
     // Enviar arquivo para o cliente
+    const timerSend = Date.now();
     res.sendFile(finalPath, (err) => {
+      console.log(`⏱️  [TIMER] Enviar arquivo: ${((Date.now() - timerSend) / 1000).toFixed(2)}s`);
+      console.log(`⏱️  [TIMER] TOTAL: ${((Date.now() - timerStart) / 1000).toFixed(2)}s`);
+      
       if (err) {
         console.error('Error sending file:', err.message);
       }
