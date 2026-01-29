@@ -1,11 +1,22 @@
 const youtubedl = require('youtube-dl-exec');
 const path = require('path');
 const fs = require('fs');
-const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 const { incrementDownload } = require('./adTracker');
 const NodeID3 = require('node-id3');
 const https = require('https');
 const http = require('http');
+
+// Detectar FFmpeg: usar do sistema no Android/Termux, senão usar @ffmpeg-installer
+let ffmpegPath;
+try {
+  // Tentar usar @ffmpeg-installer (Windows, Mac, Linux normal)
+  ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
+  console.log('✅ Usando FFmpeg do @ffmpeg-installer');
+} catch (error) {
+  // No Android/Termux, usar FFmpeg do sistema
+  ffmpegPath = 'ffmpeg';
+  console.log('✅ Usando FFmpeg do sistema (Android/Termux)');
+}
 
 // Criar pastas temp e downloads se não existirem
 const tempDir = path.join(__dirname, '..', 'temp');

@@ -2,6 +2,53 @@
 
 Guia completo para implementar download de YouTube **nativamente no Android** (sem Node.js).
 
+## 🚀 Rodando no Termux (Celular Físico)
+
+Se você quer testar rapidamente no celular usando Termux:
+
+### Passos no Termux:
+
+1. **Instalar Node.js e Yarn:**
+   ```bash
+   pkg install nodejs-lts git
+   npm install -g yarn
+   ```
+
+2. **Clonar/copiar o projeto:**
+   ```bash
+   cd ~
+   git clone [seu-repositório] baixasom-back
+   # ou copie os arquivos manualmente
+   ```
+
+3. **Instalar dependências (com fix do youtube-dl-exec):**
+   ```bash
+   cd baixasom-back
+   export YOUTUBE_DL_SKIP_PYTHON_CHECK=1
+   yarn install
+   ```
+   
+   ⚠️ **Importante:** A variável `YOUTUBE_DL_SKIP_PYTHON_CHECK=1` é necessária porque o youtube-dl-exec tenta verificar Python, mas não precisa dele para funcionar.
+
+4. **Executar o servidor:**
+   ```bash
+   node server.js
+   ```
+
+5. **Acessar do navegador:**
+   - No celular: `http://localhost:3000`
+   - De outro dispositivo na mesma rede: `http://[IP-do-celular]:3000`
+
+### Tornar permanente:
+
+Para não precisar definir a variável toda vez:
+```bash
+echo 'export YOUTUBE_DL_SKIP_PYTHON_CHECK=1' >> ~/.bashrc
+source ~/.bashrc
+```
+
+---
+
 ## 🎯 Arquitetura Nativa
 
 ```
@@ -20,10 +67,38 @@ APK Android único
 - ✅ **Totalmente offline**
 
 ⚠️ **Por que não Node.js embarcado:**
-- ❌ Biblioteca `nodejs-mobile` com problemas no JitPack
-- ❌ APK muito grande (150-200MB)
-- ❌ Complexidade de manutenção
-- ❌ Problemas de compatibilidade entre versões Android
+
+### **Opções de Node.js embarcado:**
+
+| Biblioteca | Status | Tamanho APK | Estabilidade | Recomendação |
+|------------|--------|-------------|--------------|--------------|
+| **nodejs-mobile** | ❌ Indisponível JitPack | +150MB | Baixa | ❌ Não usar |
+| **LiquidCore** | ❌ Indisponível JitPack | +80-100MB | Baixa | ❌ Não usar |
+| **YoutubeDL-Android** | ✅ Ativo | +30-50MB | Alta | ✅ **Recomendado** |
+
+### **Por que Node.js embarcado NÃO funciona:**
+
+**Problema crítico:** Tanto `nodejs-mobile` quanto `LiquidCore` estão **indisponíveis no JitPack**:
+```
+Could not find LiquidCore-0.6.2.aar (com.github.LiquidPlayer:LiquidCore:0.6.2)
+Searched in: https://jitpack.io/com/github/LiquidPlayer/LiquidCore/0.6.2/
+```
+
+**Razões:**
+- ❌ JitPack falha ao compilar essas bibliotecas
+- ❌ Projetos sem atualizações há anos
+- ❌ Incompatibilidades com Gradle/Android moderno
+- ❌ APK extremamente pesado (80-200MB)
+- ❌ Complexidade de manutenção alta
+
+**Conclusão:** Node.js embarcado no Android **não é viável** em 2026.
+
+### **Por que YoutubeDL-Android é melhor:**
+- ✅ **APK 3x menor** (30-50MB vs 80-100MB)
+- ✅ **Código nativo** - Melhor performance
+- ✅ **Sem complexidade** - Não precisa gerenciar Node.js
+- ✅ **Mais estável** - Menos camadas de abstração
+- ✅ **Mesmas funcionalidades** - Download, conversão, metadata
 
 ---
 
