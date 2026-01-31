@@ -20,18 +20,29 @@ try {
 
 // Detectar ambiente e definir diretório apropriado
 // No AWS Lambda, apenas /tmp tem permissão de escrita
+// Múltiplas formas de detecção para garantir
 const isLambda =
-  !!process.env.AWS_LAMBDA_FUNCTION_NAME || !!process.env.LAMBDA_TASK_ROOT;
+  !!process.env.AWS_LAMBDA_FUNCTION_NAME ||
+  !!process.env.LAMBDA_TASK_ROOT ||
+  __dirname.startsWith("/var/task") ||
+  __dirname.startsWith("/opt/nodejs");
+
 const tempDir = isLambda ? "/tmp" : path.join(__dirname, "..", "temp");
 const downloadsDir = path.join(tempDir, "downloads");
 
 console.log(`📁 Ambiente: ${isLambda ? "AWS Lambda" : "Local"}`);
+console.log(`📁 __dirname: ${__dirname}`);
 console.log(`📁 Diretório de downloads: ${downloadsDir}`);
 
 // Criar pastas temp e downloads se não existirem
 if (!fs.existsSync(downloadsDir)) {
-  fs.mkdirSync(downloadsDir, { recursive: true });
-  console.log("✅ Diretório de downloads criado");
+  try {
+    fs.mkdirSync(downloadsDir, { recursive: true });
+    console.log("✅ Diretório de downloads criado");
+  } catch (error) {
+    console.error("❌ Erro ao criar diretório:", error.message);
+    console.log("⚠️  Modo streaming será usado (sem gravar em disco)");
+  }
 }
 
 // Cache simples de informações de vídeos (TTL: 5 minutos)
@@ -161,6 +172,120 @@ async function getVideoInfo(url) {
 }
 
 /**
+ * Download com streaming direto (sem gravar em disco)
+ * Ideal para ambientes com restrições de escrita como AWS Lambda
+ */
+async function downloadMP3Stream(
+  url,
+  res,
+  quality = "low",
+  userIp,
+  format = "mp3",
+) {
+  const { spawn } = require("child_process");
+
+  try {
+    console.log("🌊 Iniciando download em modo streaming...");
+
+    // Mapear qualidade
+    const qualityMap = { high: 0, medium: 5, low: 9 };
+    const audioQuality =
+      qualityMap[quality] !== undefined
+        ? qualityMap[quality]
+        : qualityMap["medium"];
+    const audioFormat = ["mp3", "m4a", "mp4"].includes(format) ? format : "mp3";
+    const contentType = audioFormat === "mp3" ? "audio/mpeg" : "audio/mp4";
+
+    // Incrementar contador
+    const adStatus = incrementDownload(userIp);
+
+    // Buscar informações do vídeo
+    const info = await youtubedl(url, {
+      dumpSingleJson: true,
+      noWarnings: true,
+      preferFreeFormats: true,
+      referer: "https://www.youtube.com/",
+      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    });
+
+    const title = normalizeFilename(info.title);
+
+    // Configurar headers
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${title}.${audioFormat}"`,
+    );
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("X-Requires-Ad", adStatus.requiresAd.toString());
+    res.setHeader("X-Downloads-Count", adStatus.count.toString());
+    res.setHeader("X-Downloads-Until-Ad", adStatus.downloadsUntilAd.toString());
+
+    // Usar yt-dlp com output para stdout via spawn
+    const ytDlpArgs = [
+      url,
+      "-f",
+      "bestaudio",
+      "-x",
+      "--audio-format",
+      audioFormat,
+      "--audio-quality",
+      audioQuality.toString(),
+      "-o",
+      "-", // Output para stdout
+      "--no-warnings",
+      "--prefer-free-formats",
+      "--referer",
+      "https://www.youtube.com/",
+      "--user-agent",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    ];
+
+    // Adicionar FFmpeg location se necessário
+    if (ffmpegPath !== "ffmpeg") {
+      ytDlpArgs.push("--ffmpeg-location", path.dirname(ffmpegPath));
+    }
+
+    console.log("🚀 Iniciando yt-dlp em modo pipe...");
+
+    // Spawn yt-dlp
+    const ytdlp = spawn("yt-dlp", ytDlpArgs);
+
+    // Pipe direto para o response
+    ytdlp.stdout.pipe(res);
+
+    ytdlp.stderr.on("data", (data) => {
+      console.log(`yt-dlp: ${data.toString()}`);
+    });
+
+    ytdlp.on("error", (error) => {
+      console.error("❌ Erro no yt-dlp:", error.message);
+      if (!res.headersSent) {
+        res.status(500).json({
+          error: true,
+          message: "Erro ao processar o vídeo",
+        });
+      }
+    });
+
+    ytdlp.on("close", (code) => {
+      if (code === 0) {
+        console.log("✅ Streaming concluído com sucesso");
+      } else {
+        console.error(`❌ yt-dlp finalizou com código ${code}`);
+      }
+    });
+  } catch (error) {
+    console.error("❌ Erro no streaming:", error.message);
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: true,
+        message: "Não foi possível fazer o download do vídeo",
+      });
+    }
+  }
+}
+
+/**
  * Faz download do vídeo e converte para áudio
  * @param {string} url - URL do vídeo do YouTube
  * @param {Object} res - Express response object
@@ -177,6 +302,14 @@ async function downloadMP3(
   addMetadata = false,
   format = "mp3",
 ) {
+  // Verificar se o diretório de downloads está acessível
+  const canWriteToDisk = fs.existsSync(downloadsDir);
+
+  if (!canWriteToDisk) {
+    console.log("⚠️  Diretório não acessível - usando modo streaming");
+    return downloadMP3Stream(url, res, quality, userIp, format);
+  }
+
   try {
     const timerStart = Date.now();
     console.log("⏱️  [TIMER] Iniciando download...");
