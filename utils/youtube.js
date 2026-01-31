@@ -74,34 +74,52 @@ function setCachedVideoInfo(url, data) {
 function cleanupTempFiles() {
   try {
     const tempPath = isLambda ? "/tmp" : path.join(__dirname, "..", "temp");
+    const downloadsPath = path.join(tempPath, "downloads");
 
-    if (!fs.existsSync(tempPath)) {
-      return;
-    }
+    // Limpar ambas as pastas: temp/ e temp/downloads/
+    const pathsToClean = [tempPath, downloadsPath];
 
-    const files = fs.readdirSync(tempPath);
-    let deletedCount = 0;
+    let totalDeleted = 0;
 
-    files.forEach((file) => {
-      // Deletar apenas arquivos de áudio (mp3, m4a, mp4) e que começam com stream_
-      if (
-        (file.endsWith(".mp3") ||
-          file.endsWith(".m4a") ||
-          file.endsWith(".mp4")) &&
-        (file.startsWith("stream_") || /^\d+_/.test(file))
-      ) {
-        const filePath = path.join(tempPath, file);
-        try {
-          fs.unlinkSync(filePath);
-          deletedCount++;
-        } catch (err) {
-          console.error(`⚠️  Erro ao deletar ${file}:`, err.message);
-        }
+    pathsToClean.forEach((dirPath) => {
+      if (!fs.existsSync(dirPath)) {
+        return;
+      }
+
+      try {
+        const files = fs.readdirSync(dirPath);
+
+        files.forEach((file) => {
+          // Deletar arquivos de áudio (mp3, m4a, mp4)
+          if (
+            file.endsWith(".mp3") ||
+            file.endsWith(".m4a") ||
+            file.endsWith(".mp4")
+          ) {
+            const filePath = path.join(dirPath, file);
+            try {
+              // Verificar se é arquivo (não diretório)
+              if (fs.statSync(filePath).isFile()) {
+                fs.unlinkSync(filePath);
+                totalDeleted++;
+                console.log(`🗑️  Deletado: ${file}`);
+              }
+            } catch (err) {
+              console.error(`⚠️  Erro ao deletar ${file}:`, err.message);
+            }
+          }
+        });
+      } catch (err) {
+        console.error(`⚠️  Erro ao ler diretório ${dirPath}:`, err.message);
       }
     });
 
-    if (deletedCount > 0) {
-      console.log(`🗑️  ${deletedCount} arquivo(s) temporário(s) limpo(s)`);
+    if (totalDeleted > 0) {
+      console.log(
+        `✅ Total: ${totalDeleted} arquivo(s) temporário(s) deletado(s)`,
+      );
+    } else {
+      console.log("✅ Nenhum arquivo temporário para limpar");
     }
   } catch (error) {
     console.error("⚠️  Erro ao limpar arquivos temporários:", error.message);
@@ -109,10 +127,17 @@ function cleanupTempFiles() {
 }
 
 // Limpar arquivos temporários ao iniciar
+console.log("🧹 Executando limpeza inicial...");
 cleanupTempFiles();
 
 // Limpar arquivos temporários periodicamente (a cada 5 minutos)
-setInterval(cleanupTempFiles, 5 * 60 * 1000);
+setInterval(
+  () => {
+    console.log("🧹 Executando limpeza periódica...");
+    cleanupTempFiles();
+  },
+  5 * 60 * 1000,
+);
 
 /**
  * Normaliza o nome do arquivo removendo acentos e caracteres especiais
