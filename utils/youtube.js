@@ -69,6 +69,52 @@ function setCachedVideoInfo(url, data) {
 }
 
 /**
+ * Limpa todos os arquivos da pasta de downloads temporários
+ */
+function cleanupTempFiles() {
+  try {
+    const tempPath = isLambda ? "/tmp" : path.join(__dirname, "..", "temp");
+
+    if (!fs.existsSync(tempPath)) {
+      return;
+    }
+
+    const files = fs.readdirSync(tempPath);
+    let deletedCount = 0;
+
+    files.forEach((file) => {
+      // Deletar apenas arquivos de áudio (mp3, m4a, mp4) e que começam com stream_
+      if (
+        (file.endsWith(".mp3") ||
+          file.endsWith(".m4a") ||
+          file.endsWith(".mp4")) &&
+        (file.startsWith("stream_") || /^\d+_/.test(file))
+      ) {
+        const filePath = path.join(tempPath, file);
+        try {
+          fs.unlinkSync(filePath);
+          deletedCount++;
+        } catch (err) {
+          console.error(`⚠️  Erro ao deletar ${file}:`, err.message);
+        }
+      }
+    });
+
+    if (deletedCount > 0) {
+      console.log(`🗑️  ${deletedCount} arquivo(s) temporário(s) limpo(s)`);
+    }
+  } catch (error) {
+    console.error("⚠️  Erro ao limpar arquivos temporários:", error.message);
+  }
+}
+
+// Limpar arquivos temporários ao iniciar
+cleanupTempFiles();
+
+// Limpar arquivos temporários periodicamente (a cada 5 minutos)
+setInterval(cleanupTempFiles, 5 * 60 * 1000);
+
+/**
  * Normaliza o nome do arquivo removendo acentos e caracteres especiais
  * @param {string} filename - Nome do arquivo a ser normalizado
  * @returns {string} Nome normalizado
@@ -172,7 +218,7 @@ async function getVideoInfo(url) {
 }
 
 /**
- * Download com streaming direto (sem gravar em disco)
+ * Download com streaming direto (sem gravar em disco permanentemente)
  * Ideal para ambientes com restrições de escrita como AWS Lambda
  */
 async function downloadMP3Stream(
@@ -182,8 +228,6 @@ async function downloadMP3Stream(
   userIp,
   format = "mp3",
 ) {
-  const { spawn } = require("child_process");
-
   try {
     console.log("🌊 Iniciando download em modo streaming...");
 
@@ -199,7 +243,9 @@ async function downloadMP3Stream(
     // Incrementar contador
     const adStatus = incrementDownload(userIp);
 
-    // Buscar informações do vídeo
+    console.log("📡 Buscando informações do vídeo...");
+
+    // Obter informações do vídeo
     const info = await youtubedl(url, {
       dumpSingleJson: true,
       noWarnings: true,
@@ -209,6 +255,7 @@ async function downloadMP3Stream(
     });
 
     const title = normalizeFilename(info.title);
+    console.log(`🎵 Título: ${info.title}`);
 
     // Configurar headers
     res.setHeader(
@@ -220,58 +267,76 @@ async function downloadMP3Stream(
     res.setHeader("X-Downloads-Count", adStatus.count.toString());
     res.setHeader("X-Downloads-Until-Ad", adStatus.downloadsUntilAd.toString());
 
-    // Usar yt-dlp com output para stdout via spawn
-    const ytDlpArgs = [
-      url,
-      "-f",
-      "bestaudio",
-      "-x",
-      "--audio-format",
-      audioFormat,
-      "--audio-quality",
-      audioQuality.toString(),
-      "-o",
-      "-", // Output para stdout
-      "--no-warnings",
-      "--prefer-free-formats",
-      "--referer",
-      "https://www.youtube.com/",
-      "--user-agent",
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    ];
+    // Criar arquivo temporário (será deletado após envio)
+    const tempPath = path.join(
+      isLambda ? "/tmp" : path.join(__dirname, "..", "temp"),
+      `stream_${Date.now()}_${title}.${audioFormat}`,
+    );
 
-    // Adicionar FFmpeg location se necessário
-    if (ffmpegPath !== "ffmpeg") {
-      ytDlpArgs.push("--ffmpeg-location", path.dirname(ffmpegPath));
+    // Garantir que o diretório existe
+    const tempDirPath = path.dirname(tempPath);
+    if (!fs.existsSync(tempDirPath)) {
+      fs.mkdirSync(tempDirPath, { recursive: true });
     }
 
-    console.log("🚀 Iniciando yt-dlp em modo pipe...");
+    console.log("⏬ Baixando e convertendo áudio...");
 
-    // Spawn yt-dlp
-    const ytdlp = spawn("yt-dlp", ytDlpArgs);
-
-    // Pipe direto para o response
-    ytdlp.stdout.pipe(res);
-
-    ytdlp.stderr.on("data", (data) => {
-      console.log(`yt-dlp: ${data.toString()}`);
+    // Download do áudio
+    await youtubedl(url, {
+      extractAudio: true,
+      audioFormat: audioFormat,
+      audioQuality: audioQuality,
+      output: tempPath,
+      noWarnings: true,
+      preferFreeFormats: true,
+      referer: "https://www.youtube.com/",
+      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      ffmpegLocation:
+        ffmpegPath === "ffmpeg"
+          ? "/data/data/com.termux/files/usr/bin"
+          : path.dirname(ffmpegPath),
     });
 
-    ytdlp.on("error", (error) => {
-      console.error("❌ Erro no yt-dlp:", error.message);
+    console.log("📤 Enviando para o cliente via streaming...");
+
+    // Criar stream de leitura do arquivo
+    const fileStream = fs.createReadStream(tempPath);
+
+    // Pipe para o response
+    fileStream.pipe(res);
+
+    // Quando o streaming terminar, deletar o arquivo
+    fileStream.on("end", () => {
+      console.log("✅ Streaming concluído!");
+      fs.unlink(tempPath, (err) => {
+        if (err) {
+          console.error("⚠️  Erro ao deletar arquivo temporário:", err.message);
+        } else {
+          console.log("🗑️  Arquivo temporário deletado:", tempPath);
+        }
+      });
+    });
+
+    // Se houver erro no stream, também deletar
+    fileStream.on("error", (error) => {
+      console.error("❌ Erro no stream de arquivo:", error.message);
+      fs.unlink(tempPath, () => {}); // Tentar deletar mesmo com erro
       if (!res.headersSent) {
         res.status(500).json({
           error: true,
-          message: "Erro ao processar o vídeo",
+          message: "Erro ao enviar arquivo",
         });
       }
     });
 
-    ytdlp.on("close", (code) => {
-      if (code === 0) {
-        console.log("✅ Streaming concluído com sucesso");
-      } else {
-        console.error(`❌ yt-dlp finalizou com código ${code}`);
+    // Se o cliente cancelar o download, deletar o arquivo
+    res.on("close", () => {
+      if (fs.existsSync(tempPath)) {
+        fs.unlink(tempPath, (err) => {
+          if (!err) {
+            console.log("🗑️  Arquivo deletado após cancelamento do cliente");
+          }
+        });
       }
     });
   } catch (error) {
